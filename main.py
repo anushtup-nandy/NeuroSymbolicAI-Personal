@@ -25,12 +25,19 @@ from modules.graph import analytics
 # Ingestion modules
 from modules.ingestion.obsidian import ObsidianIngestor
 from modules.ingestion.google_takeout import GoogleTakeoutIngestor
+from modules.ingestion.llm_extractor import LLMExtractor  # Phase 1
+from modules.ingestion.triplet_extractor import TripletExtractor  # Phase 1
 
 # Heuristics
 from modules.heuristics.base import DecisionModels
 
 # Models
 from modules.models.causal import CausalInference
+
+# Agents (Phase 2)
+from modules.agents.decision_parser import DecisionParser
+from modules.agents.pattern_matcher import HistoricalPatternMatcher
+from modules.agents.bias_detector import BiasDetector
 
 
 # ========================================
@@ -106,13 +113,31 @@ with st.sidebar:
         
         st.session_state['graph'] = PersonalGraph(sentence_model)
         
+        # Initialize Phase 1 LLM components if enabled
+        llm_extractor = None
+        triplet_extractor = None
+        if use_llm:
+            with st.spinner("Initializing LLM components..."):
+                llm_extractor = LLMExtractor()
+                triplet_extractor = TripletExtractor(llm_extractor)
+                st.session_state['llm_extractor'] = llm_extractor
+                st.session_state['triplet_extractor'] = triplet_extractor
+        
         # Ingest Obsidian
         obsidian_ingestor = ObsidianIngestor(
             st.session_state['graph'], 
-            spacy_model
+            spacy_model,
+            llm_extractor=llm_extractor,
+            triplet_extractor=triplet_extractor
         )
         with st.spinner("Analyzing Obsidian vault..."):
             obsidian_ingestor.ingest(obsidian_path, use_llm=use_llm)
+        
+        # Store Phase 1 outputs
+        if use_llm and llm_extractor:
+            st.session_state['interest_profile'] = obsidian_ingestor.get_interest_profile()
+            st.session_state['decision_patterns'] = obsidian_ingestor.get_decision_patterns()
+            st.info(f"✨ LLM Analysis: Found {len(st.session_state['decision_patterns'])} decision patterns")
         
         # Ingest Google Takeout (if path provided)
         if takeout_path and os.path.exists(takeout_path):
@@ -168,12 +193,132 @@ with tab1:
     if not st.session_state['graph']:
         st.warning("⚠️ Please build the knowledge graph first (sidebar)")
     else:
-        # Query Input
-        query = st.text_input(
-            "🔍 Decision Query",
-            "Should I focus on growth or profitability?",
-            help="Describe your decision in natural language"
+        # === PHASE 2: NATURAL LANGUAGE INPUT ===
+        st.subheader("🗣️ Natural Language Decision Input (v3.0)")
+        st.caption("Describe your decision in plain English - the AI will auto-generate options, factors, and scores!")
+        
+        nl_input = st.text_area(
+            "Describe Your Decision",
+            placeholder="Example: Should I take the startup job ($140k + equity) or stay at BigCo ($180k)? I care about growth and learning, but also financial security.",
+            height=120,
+            key="nl_decision_input"
         )
+        
+        col_auto1, col_auto2 = st.columns([1, 1])
+        
+        with col_auto1:
+            auto_gen_button = st.button("🤖 Auto-Generate From Text", type="primary")
+        
+        with col_auto2:
+            if 'llm_extractor' in st.session_state:
+                st.success("✅ LLM Ready")
+            else:
+                st.warning("⚠️ Enable LLM in sidebar for auto-generation")
+        
+        # Auto-generation logic
+        if auto_gen_button:
+            if 'llm_extractor' not in st.session_state:
+                st.error("❌ Please enable 'LLM Extraction' in sidebar and rebuild the graph first!")
+            elif not nl_input or len(nl_input.strip()) < 20:
+                st.error("❌ Please provide a more detailed decision description (at least 20 characters)")
+            else:
+                with st.spinner("🧠 Analyzing your decision with AI..."):
+                    # Phase 2: Parse with AI
+                    parser = DecisionParser(
+                        st.session_state['llm_extractor'],
+                        st.session_state['graph']
+                    )
+                    
+                    try:
+                        parsed = parser.parse(nl_input)
+                        
+                        # Update session state with parsed decision
+                        st.session_state['options'] = [
+                            {
+                                'name': opt.name,
+                                'scores': parsed.initial_scores.get(opt.name, {})
+                            }
+                            for opt in parsed.options
+                        ]
+                        
+                        st.session_state['factors'] = [
+                            {
+                                'name': f.name,
+                                'weight': f.weight
+                            }
+                            for f in parsed.factors
+                        ]
+                        
+                        # Get historical suggestions if available
+                        suggested_weights = {}
+                        if 'decision_patterns' in st.session_state:
+                            matcher = HistoricalPatternMatcher(
+                                st.session_state['graph'],
+                                st.session_state['decision_patterns']
+                            )
+                            suggested_weights = matcher.suggest_weights(
+                                [f.name for f in parsed.factors],
+                                parsed.question
+                            )
+                            
+                            # Update weights with historical suggestions
+                            for factor in st.session_state['factors']:
+                                if factor['name'] in suggested_weights:
+                                    factor['weight'] = suggested_weights[factor['name']]
+                        
+                        # Detect biases
+                        detector = BiasDetector()
+                        warnings = detector.detect_biases(
+                            parsed,
+                            st.session_state.get('decision_patterns', []),
+                            st.session_state.get('interest_profile', {}),
+                            suggested_weights
+                        )
+                        
+                        # Show success and warnings
+                        st.success(f"✅ Auto-generated: {len(parsed.options)} options, {len(parsed.factors)} factors")
+                        
+                        if warnings:
+                            st.warning(f"⚠️ Detected {len(warnings)} potential biases:")
+                            for warning in warnings:
+                                severity_icon = {
+                                    'high': '🔴',
+                                    'medium': '🟡',
+                                    'low': 'ℹ️'
+                                }.get(warning.severity, '⚠️')
+                                
+                                with st.expander(f"{severity_icon} {warning.bias_type.replace('_', ' ').title()}"):
+                                    st.write(f"**{warning.message}**")
+                                    if warning.evidence:
+                                        st.caption(f"Evidence: {warning.evidence}")
+                                    if warning.suggestion:
+                                        st.info(warning.suggestion)
+                        else:
+                            st.success("✅ No cognitive biases detected")
+                        
+                        # Show what was extracted
+                        with st.expander("📊 See What Was Extracted"):
+                            st.write("**Options:**")
+                            for opt in parsed.options:
+                                st.write(f"- {opt.name}")
+                                if opt.mentioned_pros:
+                                    st.write(f"  ✅ Pros: {', '.join(opt.mentioned_pros)}")
+                                if opt.mentioned_cons:
+                                    st.write(f"  ❌ Cons: {', '.join(opt.mentioned_cons)}")
+                            
+                            st.write("\n**Factors:**")
+                            for f in parsed.factors:
+                                st.write(f"- {f.name} (weight: {f.weight:.2f})")
+                        
+                        st.info("👇 Review and adjust the auto-generated decision below")
+                        
+                    except Exception as e:
+                        st.error(f"❌ Failed to parse decision: {str(e)}")
+                        st.write("Please try rephrasing your decision or check that Ollama is running.")
+        
+        st.divider()
+        st.subheader("📝 Manual Entry (or Review Auto-Generated)")
+        st.caption("You can manually enter/edit your decision here, or review what was auto-generated above")
         
         # Options & Factors Setup
         col1, col2 = st.columns([1, 1])
@@ -327,6 +472,9 @@ with tab1:
             # 2. Semantic Context
             st.divider()
             st.header("2. Knowledge Graph Insights")
+            
+            # Use nl_input as query if available, otherwise use a default
+            query = nl_input if nl_input else "decision analysis"
             
             related_nodes = analytics.semantic_search(st.session_state['graph'], query, top_k=10)
             
