@@ -1,0 +1,100 @@
+# -------------------------
+# Python
+# -------------------------
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pdb
+*.so
+*.egg
+*.egg-info/
+*.manifest
+*.spec
+
+# Virtual Environments
+.env
+.venv
+env/
+venv/
+
+# Build / Distribution
+build/
+dist/
+pip-wheel-metadata/
+*.egg-info/
+
+# Bytecode cache
+.pytest_cache/
+.mypy_cache/
+.dmypy.json
+.pytype/
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+
+# -------------------------
+# Machine Learning Artifacts
+# -------------------------
+
+# Data (optional – remove if you want data versioned)
+data/
+datasets/
+*.csv
+*.tsv
+*.jsonl
+*.zip
+*.gz
+
+# Model weights & checkpoints
+models/
+checkpoints/
+*.pt
+*.pth
+*.ckpt
+*.h5
+*.pb
+*.onnx
+*.tflite
+
+# Training outputs
+logs/
+runs/
+tensorboard/
+wandb/
+mlruns/
+
+# Cache
+.cache/
+**/__pycache__/
+joblib/
+joblib_cache/
+*.joblib
+
+# HuggingFace
+hf_cache/
+~/.cache/huggingface/
+
+# -------------------------
+# IDE / Editor
+# -------------------------
+
+# VSCode
+.vscode/
+.history/
+
+# PyCharm
+.idea/
+
+# -------------------------
+# System / OS files
+# -------------------------
+.DS_Store
+Thumbs.db
+
+# -------------------------
+# Misc
+# -------------------------
+*.log
+*.tmp
+*.bak
