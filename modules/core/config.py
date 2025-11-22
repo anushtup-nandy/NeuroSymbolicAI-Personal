@@ -9,6 +9,7 @@ import streamlit as st
 from pathlib import Path
 from sentence_transformers import SentenceTransformer
 import spacy
+import torch
 
 
 # ========================================
@@ -25,6 +26,25 @@ SEMANTIC_THRESHOLD = 0.7
 EMBEDDING_BATCH_SIZE = 32
 MAX_SEARCH_RESULTS = 10
 
+# Device detection for GPU acceleration
+def get_device():
+    """
+    Detect best available device for model inference.
+    
+    Priority:
+    1. MPS (Apple Silicon GPU) - Mac M1/M2/M3
+    2. CUDA (NVIDIA GPU) - Linux/Windows
+    3. CPU (fallback)
+    """
+    if torch.backends.mps.is_available():
+        return "mps"
+    elif torch.cuda.is_available():
+        return "cuda"
+    else:
+        return "cpu"
+
+DEVICE = get_device()
+
 
 # ========================================
 # CACHED MODEL LOADERS
@@ -33,12 +53,15 @@ MAX_SEARCH_RESULTS = 10
 @st.cache_resource
 def load_sentence_model():
     """
-    Load Sentence-BERT model (384-dim, 22MB).
+    Load Sentence-BERT model (384-dim, 22MB) with GPU acceleration.
     
     This model is used for semantic embeddings throughout the system.
+    Automatically uses MPS on Apple Silicon for ~5-10x speedup.
     Cached to avoid reloading on every Streamlit rerun.
     """
-    return SentenceTransformer('all-MiniLM-L6-v2')
+    model = SentenceTransformer('all-MiniLM-L6-v2', device=DEVICE)
+    print(f"✅ Sentence-BERT loaded on: {DEVICE.upper()}")
+    return model
 
 
 @st.cache_resource

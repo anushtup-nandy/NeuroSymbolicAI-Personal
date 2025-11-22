@@ -211,25 +211,6 @@ def load_sentence_model():
     # return SentenceTransformer('all-mpnet-base-v2')  # Higher quality
 ```
 
----
-
-## 🛡️ Migration from v1.0
-
-The legacy monolithic `decision.py` is preserved as `decision_legacy.py`.
-
-**To migrate:**
-1. Test new modular app: `streamlit run main.py`
-2. Verify feature parity
-3. Remove `decision_legacy.py` when confident
-
-**Key differences:**
-- Same functionality, cleaner architecture
-- Explicit imports instead of monolithic file
-- Better error messages and debugging
-- Easier to extend and customize
-
----
-
 ## 🗺️ Roadmap
 
 ### Completed ✅
