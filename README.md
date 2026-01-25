@@ -1,14 +1,6 @@
-# Decision Intelligence Engine v2.0 - Modular Architecture 🧬
+# Decision Intelligence Engine
 
 **A mathematically-sound personal intelligence system** with clean, modular architecture for maintainability and extensibility.
-
----
-
-## 🎯 What's New in v2.0
-
-### ✨ Complete Modularization
-
-The monolithic 1422-line `decision.py` has been refactored into a clean, modular architecture:
 
 ```
 modules/
@@ -262,14 +254,3 @@ pytest tests/
 
 MIT License - See LICENSE file
 
----
-
-## 🙏 Acknowledgments
-
-- Original v1.0 architecture
-- NetworkX, Sentence-BERT, spaCy communities
-- All contributors to the modularization effort
-
----
-
-**Built with ❤️ for better decisions through clean code**
